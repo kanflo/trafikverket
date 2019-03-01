@@ -1,0 +1,17 @@
+#
+# Sample Trafikverket weather infor configuration file.
+
+[DEFAULT]
+# Id of weather station to pull data from
+StationID = 1208
+
+# This is where we store images and the log file. Create a RAM disk that is
+# persistent across reboots (well, the concept of a RAM disk, obviously not
+# the content ;) using ./create-ramdisk.sh
+#TempDir = /ram
+TempDir = .
+
+[MQTT]
+MQTTBroker = gateway.local
+# Post outside temperature to this topic (eg '25.5' for a nice summer's day)
+MQTTOutsideTemperatureTopic = home/temperature/outside
