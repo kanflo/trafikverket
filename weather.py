@@ -18,7 +18,11 @@ import argparse
 import configparser
 import traceback
 import json
-from dateutil.parser import parse
+try:
+    from dateutil.parser import parse
+except ImportError:
+    print("sudo -H pip3 install python-dateutil")
+    sys.exit(1)
 import datetime
 from subprocess import Popen, PIPE
 
