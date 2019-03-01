@@ -120,7 +120,8 @@ def main():
                 precip = w["Measurement"]["Precipitation"]["Type"]
                 if age < 45:
                     cmd = "mosquitto_pub -h %s -t %s -m %s" % (config["MQTT"]["MQTTBroker"], config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp)
-                    print("%s: temperature %sC, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir.lower(), wind_gust, precip.lower()))
+                    if args.verbose:
+                        print("%s: temperature %sC, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir.lower(), wind_gust, precip.lower()))
                 else:
                     logging.error("Measurement too old (%d minutes)" % age)
                     cmd = "mosquitto_pub -h %s -t %s -m -" % (config["MQTT"]["MQTTBroker"], config["MQTT"]["MQTTOutsideTemperatureTopic"])
