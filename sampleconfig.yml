@@ -13,7 +13,8 @@ MQTTOutsideTemperatureTopic = home/temperature/outside
 MQTTWindSpeedTopic = home/wind/speed
 # Wind gust in mps.
 MQTTWindGustTopic = home/wind/gust
-# Wind direction in degrees. 90 indicates wind from the east.
+# Wind direction in degrees, that is "the direction the wind is blowing _from_"
+# Eg. 180 indicates wind from south
 MQTTWindDirectionTopic = home/wind/direction
 # Precipitation type: 'noprecipitation', 'snow', 'rain'.
 MQTTPrecipitationTypeTopic = home/precipitation/type

@@ -124,7 +124,6 @@ def process_feed(j, config, max_age):
             precip_type = precip_type[len("precipitation"):].lower()
             if not precip_type in p:
                 p.append(precip_type)
-                logging.debug(w["Measurement"]["Precipitation"])
         except KeyError:
             precip_type = None
         try:
@@ -133,6 +132,10 @@ def process_feed(j, config, max_age):
             precip_amount = None
 
         if w["Id"] == ("SE_STA_VVIS%s" % config["DEFAULT"]["StationID"]):
+            print(w["Measurement"]["Air"])
+            print(w["Measurement"]["Wind"])
+            print(w["Measurement"]["Precipitation"])
+
             now = datetime.datetime.now()
             name = w["Name"]
             time = parse(w["Measurement"]["MeasureTime"])
@@ -140,14 +143,13 @@ def process_feed(j, config, max_age):
             age = round(time_delta.total_seconds() / 60)
             air_temp = float(w["Measurement"]["Air"]["Temp"])
             # Methinks decimals look silly
-            if air_temp < 0.1 or air_temp > 0.1:
+            if air_temp < 0.1 and air_temp > -0.1:
+                logging.debug("Zeroing %.2f -> %.2f" % (air_temp, 0))
                 air_temp = 0
             elif air_temp > 2 or air_temp < -2:
+                logging.debug("Rounding %.2f -> %.2f" % (air_temp, round(air_temp)))
                 air_temp = round(air_temp)
             wind_dir = w["Measurement"]["Wind"]["Direction"]
-
-            print(w["Measurement"]["Wind"])
-            print(w["Measurement"]["Precipitation"])
 
             if age < max_age:
                 logging.debug("%s: temperature %s°C, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
