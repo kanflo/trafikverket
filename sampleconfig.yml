@@ -1,17 +1,21 @@
 #
-# Sample Trafikverket weather infor configuration file.
+# Sample Trafikverket weather information configuration file.
 
 [DEFAULT]
-# Id of weather station to pull data from
+# Id of weather station to pull data from. This one is for Dalby.
 StationID = 1208
 
-# This is where we store images and the log file. Create a RAM disk that is
-# persistent across reboots (well, the concept of a RAM disk, obviously not
-# the content ;) using ./create-ramdisk.sh
-#TempDir = /ram
-TempDir = .
-
 [MQTT]
-MQTTBroker = gateway.local
-# Post outside temperature to this topic (eg '25.5' for a nice summer's day)
+MQTTBroker = nano.local
+# Post outside temperature to this topic (eg '25.5' for a nice summer's day).
 MQTTOutsideTemperatureTopic = home/temperature/outside
+# Wind speed in mps.
+MQTTWindSpeedTopic = home/wind/speed
+# Wind gust in mps.
+MQTTWindGustTopic = home/wind/gust
+# Wind direction in degrees. 90 indicates wind from the east.
+MQTTWindDirectionTopic = home/wind/direction
+# Precipitation type: 'noprecipitation', 'snow', 'rain'.
+MQTTPrecipitationTypeTopic = home/precipitation/type
+# Amount of precipitation (mm/h) if type != noprecipitation.
+MQTTPrecipitationAmountTopic = home/precipitation/amount
