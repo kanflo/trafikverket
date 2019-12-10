@@ -27,9 +27,6 @@ import datetime
 from subprocess import Popen, PIPE
 
 
-# Disregard from meauserements older that 30 minutes
-MAX_AGE = 30
-
 def cmd_run(cmd):
     """
     @brief      Simple popen wrapper
@@ -194,12 +191,15 @@ def main():
     logging.info("---[ Starting %s ]---------------------------------------------" % sys.argv[0])
 
     if args.load:
-        MAX_AGE = 99999999
+        max_age = 99999999
         with open('weather.json', 'r') as f:
             j = json.loads(f.read())
     else:
+        # Disregard from meauserements older that 30 minutes
+        max_age = 30
+
         j = get_feed(args.save)
-    process_feed(j, config, MAX_AGE)
+    process_feed(j, config, max_age)
 
 if __name__ == "__main__":
     try:
