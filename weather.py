@@ -46,7 +46,7 @@ def cmd_run(cmd):
     return (stdout, stderr)
 
 
-def mqtt_publish(broker, topic, message):
+def mqtt_publish(broker, topic, message, retain = False):
     """
     Publish topic to broker
 
@@ -63,6 +63,8 @@ def mqtt_publish(broker, topic, message):
 #        message = '\\ ' # todo: this does not work well. '\' is published
         message = '_'
     cmd = "mosquitto_pub -h %s -t %s -m %s" % (broker, topic, message)
+    if retain:
+        cmd += " --retain"
     cmd_run(cmd)
 
 
@@ -108,6 +110,9 @@ def process_feed(j, config, max_age):
     """
     p = []
     broker = config["MQTT"]["MQTTBroker"]
+
+    retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
+
     for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
         try:
             wind_speed = w["Measurement"]["Wind"]["Force"]
@@ -129,7 +134,7 @@ def process_feed(j, config, max_age):
         try:
             precip_amount = w["Measurement"]["Precipitation"]["Amount"]
         except KeyError:
-            precip_amount = None
+            precip_amount = 0
 
         if w["Id"] == ("SE_STA_VVIS%s" % config["DEFAULT"]["StationID"]):
             print(w["Measurement"]["Air"])
@@ -153,20 +158,20 @@ def process_feed(j, config, max_age):
 
             if age < max_age:
                 logging.debug("%s: temperature %s°C, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
-                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], wind_speed)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], wind_gust)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], wind_dir)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount)
+                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain)
             else:
                 logging.error("Measurement too old (%d minutes)" % age)
-                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], None)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], None)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], None)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], None)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], None)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], None)
+                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], None, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], None, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], None, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], None, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], None, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], None, retain)
     logging.debug("Found the following precipitations: %s" % (p))
 
 

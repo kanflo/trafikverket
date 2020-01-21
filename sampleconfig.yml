@@ -20,3 +20,5 @@ MQTTWindDirectionTopic = home/wind/direction
 MQTTPrecipitationTypeTopic = home/precipitation/type
 # Amount of precipitation (mm/h) if type != noprecipitation.
 MQTTPrecipitationAmountTopic = home/precipitation/amount
+# Retain published message
+Retain = True
