@@ -7,6 +7,8 @@ StationID = 1208
 
 [MQTT]
 MQTTBroker = nano.local
+# Post combined observation on this topic
+MQTTObservationTopic = home/observation
 # Post outside temperature to this topic (eg '25.5' for a nice summer's day).
 MQTTOutsideTemperatureTopic = home/temperature/outside
 # Wind speed in mps.

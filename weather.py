@@ -13,7 +13,6 @@ except ImportError:
     print("sudo -H pip3 install requests")
     sys.exit(1)
 import logging
-from logging.handlers import RotatingFileHandler
 import argparse
 import configparser
 import traceback
@@ -158,6 +157,16 @@ def process_feed(j, config, max_age):
 
             if age < max_age:
                 logging.debug("%s: temperature %s°C, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
+                observation = {"temperature": air_temp,
+                               "wind_speed": wind_speed,
+                               "wind_gust": wind_gust,
+                               "wind_direction": wind_dir,
+                               "precip_type": precip_type,
+                               "precip_amount": precip_amount
+                               }
+                observation = "%s" % observation
+                observation = observation.replace(" ", "")
+                mqtt_publish(broker, config["MQTT"]["MQTTObservationTopic"], observation, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain)
