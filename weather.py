@@ -165,7 +165,7 @@ def process_feed(j, config, max_age):
                                "precip_amount": precip_amount
                                }
                 observation = "%s" % observation
-                observation = observation.replace(" ", "")
+                observation = observation.replace(" ", "").replace("'", "\"")
                 mqtt_publish(broker, config["MQTT"]["MQTTObservationTopic"], observation, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain)
