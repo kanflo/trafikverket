@@ -2,8 +2,8 @@
 # Sample Trafikverket weather information configuration file.
 
 [DEFAULT]
-# Id of weather station to pull data from. This one is for Dalby.
-StationID = 1208
+# Id of weather station to pull data from. This one is for Lund.
+StationID = 1209
 
 [MQTT]
 MQTTBroker = nano.local
