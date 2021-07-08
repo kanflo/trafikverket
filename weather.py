@@ -4,7 +4,8 @@
 #
 # Pull data form the inofficial Trafikverket weather stataion API (2MiB of data
 # mind you...). Search for the weather station in the provided config file and
-# post air temperature to the specified MQTT topic.
+# post air temperature to the specified MQTT topic. If a measurement is older than
+# 30 minutes it will be posted as 999. You should handle this in your client :)
 
 import sys
 try:
@@ -24,6 +25,8 @@ except ImportError:
     sys.exit(1)
 import datetime
 from subprocess import Popen, PIPE
+
+measurement_too_old = "999"
 
 
 def cmd_run(cmd):
@@ -58,9 +61,9 @@ def mqtt_publish(broker, topic, message, retain = False):
 
     :returns:   Nothing
     """
-    if message == None:
-#        message = '\\ ' # todo: this does not work well. '\' is published
-        message = '_'
+    if message is None:
+        logging.error("Cannot publish 'None' messages on topic %s" % (topic))
+        return
     cmd = "mosquitto_pub -h %s -t %s -m %s" % (broker, topic, message)
     if retain:
         cmd += " --retain"
@@ -175,12 +178,12 @@ def process_feed(j, config, max_age):
                 mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain)
             else:
                 logging.error("Measurement too old (%d minutes)" % age)
-                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], None, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], None, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], None, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], None, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], None, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], None, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
+                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
     logging.debug("Found the following precipitations: %s" % (p))
 
 
