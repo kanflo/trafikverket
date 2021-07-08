@@ -214,8 +214,8 @@ def main():
         with open('weather.json', 'r') as f:
             j = json.loads(f.read())
     else:
-        # Disregard from meauserements older that 30 minutes
-        max_age = 30
+        # Disregard from meauserements older that 60 minutes
+        max_age = 60
 
         j = get_feed(args.save)
     process_feed(j, config, max_age)
