@@ -5,7 +5,7 @@
 # Pull data form the inofficial Trafikverket weather stataion API (2MiB of data
 # mind you...). Search for the weather station in the provided config file and
 # post air temperature to the specified MQTT topic. If a measurement is older than
-# 30 minutes it will be posted as 999. You should handle this in your client :)
+# 60 minutes it will be posted as _. You should handle this in your client :)
 
 import sys
 try:
@@ -26,7 +26,7 @@ except ImportError:
 import datetime
 from subprocess import Popen, PIPE
 
-measurement_too_old = "999"
+measurement_too_old = "_"
 
 
 def cmd_run(cmd):
@@ -116,39 +116,48 @@ def process_feed(j, config, max_age):
     retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
 
     for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
-        try:
-            wind_speed = w["Measurement"]["Wind"]["Force"]
-        except KeyError:
-            wind_speed = None
-        try:
-            wind_gust = w["Measurement"]["Wind"]["ForceMax"]
-        except KeyError:
-            wind_gust = None
-        try:
-            # Precipitation looks loke precipitationSnow or precipitationNoPrecipitation
-            # Chop off the leading 'precipitation'
-            precip_type = w["Measurement"]["Precipitation"]["TypeIconId"]
-            precip_type = precip_type[len("precipitation"):].lower()
-            if not precip_type in p:
-                p.append(precip_type)
-        except KeyError:
-            precip_type = None
-        try:
-            precip_amount = w["Measurement"]["Precipitation"]["Amount"]
-        except KeyError:
-            precip_amount = 0
-
         if w["Id"] == ("SE_STA_VVIS%s" % config["DEFAULT"]["StationID"]):
-            print(w["Measurement"]["Air"])
-            print(w["Measurement"]["Wind"])
-            print(w["Measurement"]["Precipitation"])
-
             now = datetime.datetime.now()
             name = w["Name"]
-            time = parse(w["Measurement"]["MeasureTime"])
+            meas = w["Measurement"]
+            time = parse(meas["MeasureTime"])
             time_delta = now - time
             age = round(time_delta.total_seconds() / 60)
-            air_temp = float(w["Measurement"]["Air"]["Temp"])
+            if age > max_age:
+                logging.warning("Current measurement is too old, trying history")
+                time = parse(w["MeasurementHistory"][0]["MeasureTime"])
+                time_delta = now - time
+                age = round(time_delta.total_seconds() / 60)
+                if age < max_age:
+                    meas = w["MeasurementHistory"][0]
+
+            print(meas["Air"])
+            print(meas["Wind"])
+            print(meas["Precipitation"])
+
+            try:
+                wind_speed = meas["Wind"]["Force"]
+            except KeyError:
+                wind_speed = None
+            try:
+                wind_gust = meas["Wind"]["ForceMax"]
+            except KeyError:
+                wind_gust = None
+            try:
+                # Precipitation looks like precipitationSnow or precipitationNoPrecipitation
+                # Chop off the leading 'precipitation'
+                precip_type = meas["Precipitation"]["TypeIconId"]
+                precip_type = precip_type[len("precipitation"):].lower()
+                if not precip_type in p:
+                    p.append(precip_type)
+            except KeyError:
+                precip_type = None
+            try:
+                precip_amount = meas["Precipitation"]["Amount"]
+            except KeyError:
+                precip_amount = 0
+
+            air_temp = float(meas["Air"]["Temp"])
             # Methinks decimals look silly
             if air_temp < 0.1 and air_temp > -0.1:
                 logging.debug("Zeroing %.2f -> %.2f" % (air_temp, 0))
@@ -156,7 +165,7 @@ def process_feed(j, config, max_age):
             elif air_temp > 2 or air_temp < -2:
                 logging.debug("Rounding %.2f -> %.2f" % (air_temp, round(air_temp)))
                 air_temp = round(air_temp)
-            wind_dir = w["Measurement"]["Wind"]["Direction"]
+            wind_dir = meas["Wind"]["Direction"]
 
             if age < max_age:
                 logging.debug("%s: temperature %s°C, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
@@ -184,7 +193,6 @@ def process_feed(j, config, max_age):
                 mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
-    logging.debug("Found the following precipitations: %s" % (p))
 
 
 def main():
