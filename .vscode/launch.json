@@ -1,0 +1,50 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Weather",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/weather.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-c", "sampleconfig.yml"],
+            "subProcess": true,
+            "justMyCode": false
+        },
+        {
+            "name": "Debug logging",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/weather.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-c", "sampleconfig.yml", "-v"],
+            "subProcess": true,
+            "justMyCode": false
+        },
+        {
+            "name": "Save JSON",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/weather.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-c", "sampleconfig.yml", "-v", "-s"],
+            "subProcess": true,
+            "justMyCode": false
+        },
+        {
+            "name": "Load JSON",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/weather.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-c", "sampleconfig.yml", "-v", "-l"],
+            "subProcess": true,
+            "justMyCode": false
+        }
+    ]
+}
