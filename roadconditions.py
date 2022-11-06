@@ -88,7 +88,7 @@ def get_image(url: str) -> PngImageFile:
     return im
 
 
-def get_prominent_color(im: PngImageFile) -> tuple[int, int, int]:
+def get_prominent_color(im: PngImageFile) -> tuple:
     """Get the prominent color from image in URL
 
     Args:
@@ -148,7 +148,7 @@ def mqtt_publish(broker: str, topic: str, message: str, retain: bool = False):
     cmd_run(cmd)
 
 
-def color_saturate(color: tuple[int, int, int]) -> tuple[int, int, int]:
+def color_saturate(color: tuple) -> tuple:
     """Saturate color (eg. #cc1000 -> #ff0000)
 
     Args:
@@ -164,7 +164,7 @@ def color_saturate(color: tuple[int, int, int]) -> tuple[int, int, int]:
     return (r, g, b)
 
 
-def name_color(color: tuple[int, int, int]) -> str:
+def name_color(color: tuple) -> str:
     """Name a color
 
     Args:
