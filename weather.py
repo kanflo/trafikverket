@@ -13,6 +13,7 @@ try:
 except ImportError:
     print("sudo -H python -m pip install requests")
     sys.exit(1)
+import time
 import logging
 import argparse
 import configparser
@@ -23,49 +24,13 @@ except ImportError:
     print("sudo -H python -m pip install python-dateutil")
     sys.exit(1)
 import datetime
-from subprocess import Popen, PIPE
+try:
+    import mqttwrapper
+except ImportError:
+    print("sudo -H python -m pip install git+https://github.com/kanflo/mqttwrapper")
+    sys.exit(1)
 
 measurement_too_old = "_"
-
-
-def cmd_run(cmd: str) -> tuple:
-    """Sample popen wraper
-
-    Args:
-        cmd (str): Command to run
-
-    Returns:
-        tuple: A tuple consisting of (stdout, stderr)
-    """
-    logging.debug(cmd)
-    temp = []
-    # Duplicated spaces will mess things up...
-    for arg in cmd.split(" "):
-        if len(arg) > 0:
-            temp.append(arg)
-    process = Popen(temp, stdout=PIPE, stderr=PIPE)
-    stdout, stderr = process.communicate()
-    if len(stderr) > 0:
-        logging.error("Command failed: %s" % (stderr.decode('utf-8')))
-    return (stdout, stderr)
-
-
-def mqtt_publish(broker: str, topic: str, message: str, retain: bool = False):
-    """Publish topic to broker in the most ugly way you can imagine but it gets the job done
-
-    Args:
-        broker (str): Address of broker
-        topic (str): Topic
-        message (str): Message
-        retain (bool, optional): Retain message on broker. Defaults to False.
-    """
-    if message is None:
-        logging.error("Cannot publish 'None' messages on topic %s" % (topic))
-        return
-    cmd = "mosquitto_pub -h %s -t %s -m %s" % (broker, topic, message)
-    if retain:
-        cmd += " --retain"
-    cmd_run(cmd)
 
 
 def get_feed(save_file: bool = False) -> dict:
@@ -199,17 +164,21 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
                                }
                 observation = "%s" % observation
                 observation = observation.replace(" ", "").replace("'", "\"")
-                mqtt_publish(broker, config["MQTT"]["MQTTObservationTopic"], observation, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTObservationTopic"], observation, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain=retain)
                 return True
             else:
                 logging.error("Measurement too old (%d minutes)" % age)
                 return False
+
+
+def mqtt_callback(topic: str, payload: str):
+    pass
 
 
 def main():
@@ -234,6 +203,13 @@ def main():
                         datefmt='%Y%m%d %H:%M:%S')
     logging.info("---[ Starting %s ]---------------------------------------------" % sys.argv[0])
 
+    broker = config["MQTT"]["MQTTBroker"]
+    retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
+    mqttwrapper.run_script(mqtt_callback, broker=broker, topics=["/nada"], retain=retain, blocking=False)
+    while not mqttwrapper.is_connected():
+        time.sleep(1)
+    logging.info("Connected to MQTT broker")
+
     if args.load:
         max_age = 99999999
         with open('weather.json', 'r') as f:
@@ -252,12 +228,12 @@ def main():
         if not success:
             broker = config["MQTT"]["MQTTBroker"]
             retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
-            mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
-            mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
-            mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
-            mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
-            mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
-            mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(broker, config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
 
 
 if __name__ == "__main__":

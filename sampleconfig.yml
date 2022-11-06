@@ -31,7 +31,7 @@ TileY = 418
 
 [MQTT]
 # Post combined observation on this topic
-MQTTBroker = nano.local
+MQTTBroker = mqtt://nano.local
 # Post outside temperature to this topic (eg '25.5' for a nice summer's day).
 MQTTObservationTopic = home/observation
 # Wind speed in mps.
