@@ -2,7 +2,7 @@
 #
 # Not copyrighted at all by Johan Kanflo in 2019 - CC0 applies
 #
-# Pull data form the inofficial Trafikverket weather stataion API (2MiB of data
+# Pull data from the inofficial Trafikverket weather stataion API (2MiB of data
 # mind you...). Search for the weather station in the provided config file and
 # post air temperature to the specified MQTT topic. If a measurement is older than
 # 60 minutes it will be posted as _. You should handle this in your client :)
@@ -140,7 +140,7 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
         logging.error("Response is invalid, seems the api was updated ('RESULT.RESULT' is missing)")
         return False
     for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
-        if w["Id"] == ("SE_STA_VVIS%s" % config["DEFAULT"]["StationID"]):
+        if w["Id"] == ("SE_STA_VVIS%s" % config["Weather"]["StationID"]):
             now = datetime.datetime.now()
             name = w["Name"]
             meas = w["Measurement"]
@@ -225,7 +225,7 @@ def main():
     try:
         config.read(args.config, encoding='utf-8')
     except Exception as e:
-        print("Failed to read config file: %s" % str(e))
+        logging.error("Failed to read config file: %s" % str(e))
         sys.exit(1)
 
     level = logging.DEBUG if args.verbose else logging.INFO
@@ -248,7 +248,7 @@ def main():
         try:
             success = process_feed(j, config, max_age)
         except Exception as e:
-            logging.error("Feed processing caused excetion", exc_info=True)
+            logging.error("Feed processing caused exception", exc_info=True)
         if not success:
             broker = config["MQTT"]["MQTTBroker"]
             retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]

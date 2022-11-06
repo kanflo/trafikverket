@@ -14,6 +14,17 @@
             "justMyCode": false
         },
         {
+            "name": "Road Conditions",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/roadconditions.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-c", "sampleconfig.yml"],
+            "subProcess": true,
+            "justMyCode": false
+        },
+        {
             "name": "Debug logging",
             "type": "python",
             "request": "launch",

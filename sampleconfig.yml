@@ -1,28 +1,53 @@
 #
-# Sample Trafikverket weather information configuration file.
+# Sample Trafikverket configuration file.
 
-[DEFAULT]
-# Id of weather station to pull data from. This one is for Lund.
+[Weather]
+# Id of weather station to pull data from.
+# This one is for Lund.
 #StationID = 1209
 # And this one is for Dalby.
 StationID = 1208
 
+# Sample road conditions. Index them to use more than one.
+# ZoomLevel, TileX and TileY comes from the URL that you need to find using Chome:
+#  https://maps.trafikinfo.trafikverket.se/TMS/.TMS/1.0.0/LPV/8/564/72.png
+[Condition0]
+RoadName = 102
+ZoomLevel = 8
+TileX = 564
+TileY = 72
+
+[Condition1]
+RoadName = 11
+ZoomLevel = 10
+TileX = 2822
+TileY = 358
+
+[Condition2]
+RoadName = Norrland
+ZoomLevel = 8
+TileX = 626
+TileY = 418
+
 [MQTT]
-MQTTBroker = nano.local
 # Post combined observation on this topic
-MQTTObservationTopic = home/observation
+MQTTBroker = nano.local
 # Post outside temperature to this topic (eg '25.5' for a nice summer's day).
-MQTTOutsideTemperatureTopic = home/temperature/outside
+MQTTObservationTopic = home/observation
 # Wind speed in mps.
-MQTTWindSpeedTopic = home/wind/speed
+MQTTOutsideTemperatureTopic = home/temperature/outside
 # Wind gust in mps.
-MQTTWindGustTopic = home/wind/gust
+MQTTWindSpeedTopic = home/wind/speed
 # Wind direction in degrees, that is "the direction the wind is blowing _from_"
 # Eg. 180 indicates wind from south
-MQTTWindDirectionTopic = home/wind/direction
+MQTTWindGustTopic = home/wind/gust
 # Precipitation type: 'noprecipitation', 'snow', 'rain'.
-MQTTPrecipitationTypeTopic = home/precipitation/type
+MQTTWindDirectionTopic = home/wind/direction
 # Amount of precipitation (mm/h) if type != noprecipitation.
-MQTTPrecipitationAmountTopic = home/precipitation/amount
+MQTTPrecipitationTypeTopic = home/precipitation/type
 # Retain published message
+MQTTPrecipitationAmountTopic = home/precipitation/amount
+# Publish road condition messages
+MQTTRoadConditionTopic = home/roadcondition
+# To retain or not to retain
 Retain = False
