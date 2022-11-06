@@ -112,13 +112,16 @@ def get_feed(save_file: bool = False) -> dict:
     return resp.json()
 
 
-def process_feed(j: dict, config: dict, max_age: int):
+def process_feed(j: dict, config: dict, max_age: int) -> bool:
     """Process the JSON feed
 
     Args:
         j (dict): JSON feed read from Trafikverket
         config (dict): Dictionary of our config file
         max_age (int): Max accepted measurement age in minutes
+
+    Returns:
+        bool: True if we published data
     """
     p = []
     broker = config["MQTT"]["MQTTBroker"]
@@ -126,16 +129,16 @@ def process_feed(j: dict, config: dict, max_age: int):
     retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
     if j is None:
         logging.error("No JSON returned, seems the api was updated")
-        return
+        return False
     if "RESPONSE" not in j:
         logging.error("Response is invalid, seems the api was updated ('RESPONSE' is missing)")
-        return
+        return False
     if "RESULT" not in j["RESPONSE"]:
         logging.error("Response is invalid, seems the api was updated ('RESULT' is missing)")
-        return
+        return False
     if len(j["RESPONSE"]["RESULT"]) == 0:
         logging.error("Response is invalid, seems the api was updated ('RESULT.RESULT' is missing)")
-        return
+        return False
     for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
         if w["Id"] == ("SE_STA_VVIS%s" % config["DEFAULT"]["StationID"]):
             now = datetime.datetime.now()
@@ -186,7 +189,7 @@ def process_feed(j: dict, config: dict, max_age: int):
             wind_dir = meas["Wind"]["Direction"]
 
             if age < max_age:
-                logging.debug("%s: temperature %s°C, wind %smps from %s (gust %smps), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
+                logging.debug("%s: temperature %s°C, wind %sm/s from %s (gust %sm/s), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
                 observation = {"temperature": air_temp,
                                "wind_speed": wind_speed,
                                "wind_gust": wind_gust,
@@ -203,14 +206,10 @@ def process_feed(j: dict, config: dict, max_age: int):
                 mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type, retain)
                 mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain)
+                return True
             else:
                 logging.error("Measurement too old (%d minutes)" % age)
-                mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
-                mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
+                return False
 
 
 def main():
@@ -245,7 +244,21 @@ def main():
 
         j = get_feed(args.save)
     if j:
-        process_feed(j, config, max_age)
+        success = False
+        try:
+            success = process_feed(j, config, max_age)
+        except Exception as e:
+            logging.error("Feed processing caused excetion", exc_info=True)
+        if not success:
+            broker = config["MQTT"]["MQTTBroker"]
+            retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
+            mqtt_publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
+            mqtt_publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
+            mqtt_publish(broker, config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
+            mqtt_publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
+            mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
+            mqtt_publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
+
 
 if __name__ == "__main__":
     try:
