@@ -77,18 +77,26 @@ def get_feed(save_file = False):
 
     @return     The feed as JSON.
     """
-    url = "https://api.trafikinfo.trafikverket.se/v1.3/data.json"
-    data = '<REQUEST><LOGIN authenticationkey=\'707695ca4c704c93a80ebf62cf9af7b5\'/><QUERY  lastmodified=\'false\' objecttype=\'WeatherStation\'><FILTER></FILTER></QUERY></REQUEST>'
+    url = "https://api.trafikinfo.trafikverket.se/v2/data.json"
+    data = "<REQUEST><LOGIN authenticationkey='707695ca4c704c93a80ebf62cf9af7b5'/><QUERY  lastmodified='false' objecttype='WeatherStation' schemaversion='1' includedeletedobjects='true' sseurl='true'><FILTER><NOTLIKE name='Name' value='/Fjärryta/' /></FILTER></QUERY></REQUEST>"
+#    data = "<REQUEST><LOGIN authenticationkey=\'707695ca4c704c93a80ebf62cf9af7b5\'/><QUERY  lastmodified=\'false\' objecttype=\'WeatherStation\'><FILTER></FILTER></QUERY></REQUEST>'"
     headers = {}
     headers['Origin'] = 'https://www.trafikverket.se'
     headers['Accept-Encoding'] = 'gzip, deflate, br'
-    headers['Accept-Language'] = 'en-US,en;q=0.9,sv;q=0.8,da;q=0.7'
+    headers['Accept-Language'] = 'en-US,en;q=0.9,sv;q=0.8'
     headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-    headers['Content-Type'] = 'text/xml'
+    headers['Content-Type'] = 'text/plain'
     headers['Accept'] = 'application/json, text/javascript, */*; q=0.01'
     headers['cache-control'] = 'no-cache'
     headers['Referer'] = 'https://www.trafikverket.se/trafikinformation/vag/?TrafficType=personalTraffic&map=7%2F393050.38%2F6185337.96%2F&Layers=TrafficSituation%2BRoadWork%2BRoadWeather%2B'
     headers['Connection'] = 'keep-alive'
+    headers['Sec-Fetch-Dest'] = 'empty'
+    headers['Sec-Fetch-Mode'] = 'cors'
+    headers['Sec-Fetch-Site'] = 'same-site'
+    headers['sec-ch-ua'] = 'Not A;Brand";v="99", "Chromium";v="102", "Google Chrome";v="102"'
+    headers['sec-ch-ua-mobile'] = '?0'
+    headers['sec-ch-ua-platform'] = '"Linux"'
+
     resp = requests.post(url, headers=headers, data=data)
     if resp.status_code != 200:
         logging.error("Error: API access failed with %d" % resp.status_code)
@@ -114,13 +122,25 @@ def process_feed(j, config, max_age):
     broker = config["MQTT"]["MQTTBroker"]
 
     retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
-
+    if j is None:
+        logging.error("No JSON returned, seems the api was updated")
+        return
+    if "RESPONSE" not in j:
+        logging.error("Response is invalid, seems the api was updated ('RESPONSE' is missing)")
+        return
+    if "RESULT" not in j["RESPONSE"]:
+        logging.error("Response is invalid, seems the api was updated ('RESULT' is missing)")
+        return
+    if len(j["RESPONSE"]["RESULT"]) == 0:
+        logging.error("Response is invalid, seems the api was updated ('RESULT.RESULT' is missing)")
+        return
     for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
         if w["Id"] == ("SE_STA_VVIS%s" % config["DEFAULT"]["StationID"]):
             now = datetime.datetime.now()
             name = w["Name"]
             meas = w["Measurement"]
             time = parse(meas["MeasureTime"])
+            time = time.replace(tzinfo=None)
             time_delta = now - time
             age = round(time_delta.total_seconds() / 60)
             if age > max_age:
@@ -226,7 +246,8 @@ def main():
         max_age = 60
 
         j = get_feed(args.save)
-    process_feed(j, config, max_age)
+    if j:
+        process_feed(j, config, max_age)
 
 if __name__ == "__main__":
     try:
