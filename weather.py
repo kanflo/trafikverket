@@ -11,17 +11,16 @@ import sys
 try:
     import requests
 except ImportError:
-    print("sudo -H pip3 install requests")
+    print("sudo -H python -m pip install requests")
     sys.exit(1)
 import logging
 import argparse
 import configparser
-import traceback
 import json
 try:
     from dateutil.parser import parse
 except ImportError:
-    print("sudo -H pip3 install python-dateutil")
+    print("sudo -H python -m pip install python-dateutil")
     sys.exit(1)
 import datetime
 from subprocess import Popen, PIPE
@@ -29,11 +28,14 @@ from subprocess import Popen, PIPE
 measurement_too_old = "_"
 
 
-def cmd_run(cmd):
-    """
-    @brief      Simple popen wrapper
+def cmd_run(cmd: str) -> tuple:
+    """Sample popen wraper
 
-    @return     A tuple consisting of (stdout, stderr)
+    Args:
+        cmd (str): Command to run
+
+    Returns:
+        tuple: A tuple consisting of (stdout, stderr)
     """
     logging.debug(cmd)
     temp = []
@@ -48,18 +50,14 @@ def cmd_run(cmd):
     return (stdout, stderr)
 
 
-def mqtt_publish(broker, topic, message, retain = False):
-    """
-    Publish topic to broker
+def mqtt_publish(broker: str, topic: str, message: str, retain: bool = False):
+    """Publish topic to broker in the most ugly way you can imagine but it gets the job done
 
-    :param      broker:   Address of broker
-    :type       broker:   String
-    :param      topic:    Topic
-    :type       topic:    String
-    :param      message:  Message
-    :type       message:  String
-
-    :returns:   Nothing
+    Args:
+        broker (str): Address of broker
+        topic (str): Topic
+        message (str): Message
+        retain (bool, optional): Retain message on broker. Defaults to False.
     """
     if message is None:
         logging.error("Cannot publish 'None' messages on topic %s" % (topic))
@@ -70,16 +68,23 @@ def mqtt_publish(broker, topic, message, retain = False):
     cmd_run(cmd)
 
 
+def get_feed(save_file: bool = False) -> dict:
+    """Get Trafikverket weather station feed
 
-def get_feed(save_file = False):
-    """
-    @brief      Get Trafikverket weather station feed
+    Args:
+        save_file (bool, optional): Save json. Defaults to False.
 
-    @return     The feed as JSON.
+    Returns:
+        dict: _description_
     """
+    api_key = "707695ca4c704c93a80ebf62cf9af7b5"
+    # If the API key ever changes, it can be found in a section looking like this:
+    # <mapcomponent showroadconditionlayer="showroadconditionlayer"
+    #               mapurl="https://maps.trafikinfo.trafikverket.se"
+    #               apikey="707695ca4c704c93a80ebf62cf9af7b5"
+    #               apiurl="https://api.trafikinfo.trafikverket.se/v2/data.json"></mapcomponent>
     url = "https://api.trafikinfo.trafikverket.se/v2/data.json"
-    data = "<REQUEST><LOGIN authenticationkey='707695ca4c704c93a80ebf62cf9af7b5'/><QUERY  lastmodified='false' objecttype='WeatherStation' schemaversion='1' includedeletedobjects='true' sseurl='true'><FILTER><NOTLIKE name='Name' value='/Fjärryta/' /></FILTER></QUERY></REQUEST>"
-#    data = "<REQUEST><LOGIN authenticationkey=\'707695ca4c704c93a80ebf62cf9af7b5\'/><QUERY  lastmodified=\'false\' objecttype=\'WeatherStation\'><FILTER></FILTER></QUERY></REQUEST>'"
+    data = "<REQUEST><LOGIN authenticationkey='%s'/><QUERY  lastmodified='false' objecttype='WeatherStation' schemaversion='1' includedeletedobjects='true' sseurl='true'><FILTER><NOTLIKE name='Name' value='/Fjärryta/' /></FILTER></QUERY></REQUEST>" % (api_key)
     headers = {}
     headers['Origin'] = 'https://www.trafikverket.se'
     headers['Accept-Encoding'] = 'gzip, deflate, br'
@@ -107,16 +112,13 @@ def get_feed(save_file = False):
     return resp.json()
 
 
-def process_feed(j, config, max_age):
-    """
-    Process the JSON feed
+def process_feed(j: dict, config: dict, max_age: int):
+    """Process the JSON feed
 
-    :param      j:    JSON feed read from Trafikverket
-    :type       j:    JSON
-    :param      config:    Dictionary of our config file
-    :type       config:    dict
-    :param      max_age:    Max accepted measurement age
-    :type       max_age:    int
+    Args:
+        j (dict): JSON feed read from Trafikverket
+        config (dict): Dictionary of our config file
+        max_age (int): Max accepted measurement age in minutes
     """
     p = []
     broker = config["MQTT"]["MQTTBroker"]
@@ -150,10 +152,6 @@ def process_feed(j, config, max_age):
                 age = round(time_delta.total_seconds() / 60)
                 if age < max_age:
                     meas = w["MeasurementHistory"][0]
-
-            print(meas["Air"])
-            print(meas["Wind"])
-            print(meas["Precipitation"])
 
             try:
                 wind_speed = meas["Wind"]["Force"]
