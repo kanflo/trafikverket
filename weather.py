@@ -107,7 +107,10 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
     for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
         if w["Id"] == ("SE_STA_VVIS%s" % config["Weather"]["StationID"]):
             now = datetime.datetime.now()
-            name = w["Name"]
+            try:
+                name = w["Name"]
+            except KeyError:
+                name = "noname"
             meas = w["Measurement"]
             time = parse(meas["MeasureTime"])
             time = time.replace(tzinfo=None)
@@ -151,11 +154,22 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
             elif air_temp > 2 or air_temp < -2:
                 logging.debug("Rounding %.2f -> %.2f" % (air_temp, round(air_temp)))
                 air_temp = round(air_temp)
+
+            road_temp = float(meas["Road"]["Temp"])
+            # Methinks decimals look silly
+            if road_temp < 0.1 and road_temp > -0.1:
+                logging.debug("Zeroing %.2f -> %.2f" % (road_temp, 0))
+                road_temp = 0
+            elif road_temp > 2 or air_temp < -2:
+                logging.debug("Rounding %.2f -> %.2f" % (road_temp, round(road_temp)))
+                road_temp = round(road_temp)
+
             wind_dir = meas["Wind"]["Direction"]
 
             if age < max_age:
                 logging.debug("%s: temperature %s°C, wind %sm/s from %s (gust %sm/s), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
                 observation = {"temperature": air_temp,
+                               "road_temperature": air_temp,
                                "wind_speed": wind_speed,
                                "wind_gust": wind_gust,
                                "wind_direction": wind_dir,
@@ -166,6 +180,7 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
                 observation = observation.replace(" ", "").replace("'", "\"")
                 mqttwrapper.publish(config["MQTT"]["MQTTObservationTopic"], observation, retain=retain)
                 mqttwrapper.publish(config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain=retain)
+                mqttwrapper.publish(config["MQTT"]["MQTTRoadTemperatureTopic"], road_temp, retain=retain)
                 mqttwrapper.publish(config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain=retain)
                 mqttwrapper.publish(config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain=retain)
                 mqttwrapper.publish(config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain=retain)
@@ -228,12 +243,12 @@ def main():
         if not success:
             broker = config["MQTT"]["MQTTBroker"]
             retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
-            mqttwrapper.publish(broker, config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
-            mqttwrapper.publish(broker, config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
-            mqttwrapper.publish(broker, config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
-            mqttwrapper.publish(broker, config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
-            mqttwrapper.publish(broker, config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
-            mqttwrapper.publish(broker, config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTOutsideTemperatureTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTWindSpeedTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTWindGustTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
 
 
 if __name__ == "__main__":

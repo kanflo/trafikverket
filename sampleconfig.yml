@@ -5,8 +5,8 @@
 # Id of weather station to pull data from.
 # This one is for Lund.
 #StationID = 1209
-# And this one is for Dalby.
-StationID = 1208
+# And this one is for Dalby Knivsåsen.
+StationID = 1200
 
 # Sample road conditions. Index them to use more than one.
 # ZoomLevel, TileX and TileY comes from the URL that you need to find using Chome:
@@ -34,8 +34,10 @@ TileY = 418
 MQTTBroker = mqtt://nano.local
 # Post outside temperature to this topic (eg '25.5' for a nice summer's day).
 MQTTObservationTopic = home/observation
-# Wind speed in mps.
+# Temperature.
 MQTTOutsideTemperatureTopic = home/temperature/outside
+# Road temperature.
+MQTTRoadTemperatureTopic = home/temperature/road
 # Wind gust in mps.
 MQTTWindSpeedTopic = home/wind/speed
 # Wind direction in degrees, that is "the direction the wind is blowing _from_"
