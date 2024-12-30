@@ -51,5 +51,12 @@ MQTTPrecipitationTypeTopic = home/precipitation/type
 MQTTPrecipitationAmountTopic = home/precipitation/amount
 # Publish road condition messages
 MQTTRoadConditionTopic = home/roadcondition
+# Publish dew point and relative humidity
+MQTTDewPointTopic = home/dewpoint
+MQTTRelativeHumidityTopic = home/relativehumidity
+
+# Publish error messages
+MQTTTemperatureErrorTopic = home/temperature/error
+MQTTRoadConditionErrorTopic = home/roadcondition/error
 # To retain or not to retain
 Retain = False

@@ -15,6 +15,7 @@ except ImportError:
     sys.exit(1)
 import time
 import logging
+import socket
 import argparse
 import configparser
 import json
@@ -48,33 +49,35 @@ def get_feed(save_file: bool = False) -> dict:
     #               mapurl="https://maps.trafikinfo.trafikverket.se"
     #               apikey="707695ca4c704c93a80ebf62cf9af7b5"
     #               apiurl="https://api.trafikinfo.trafikverket.se/v2/data.json"></mapcomponent>
-    url = "https://api.trafikinfo.trafikverket.se/v2/data.json"
-    data = "<REQUEST><LOGIN authenticationkey='%s'/><QUERY  lastmodified='false' objecttype='WeatherStation' schemaversion='1' includedeletedobjects='true' sseurl='true'><FILTER><NOTLIKE name='Name' value='/Fjärryta/' /></FILTER></QUERY></REQUEST>" % (api_key)
-    headers = {}
-    headers['Origin'] = 'https://www.trafikverket.se'
-    headers['Accept-Encoding'] = 'gzip, deflate, br'
-    headers['Accept-Language'] = 'en-US,en;q=0.9,sv;q=0.8'
-    headers['User-Agent'] = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.77 Safari/537.36'
-    headers['Content-Type'] = 'text/plain'
-    headers['Accept'] = 'application/json, text/javascript, */*; q=0.01'
-    headers['cache-control'] = 'no-cache'
-    headers['Referer'] = 'https://www.trafikverket.se/trafikinformation/vag/?TrafficType=personalTraffic&map=7%2F393050.38%2F6185337.96%2F&Layers=TrafficSituation%2BRoadWork%2BRoadWeather%2B'
-    headers['Connection'] = 'keep-alive'
-    headers['Sec-Fetch-Dest'] = 'empty'
-    headers['Sec-Fetch-Mode'] = 'cors'
-    headers['Sec-Fetch-Site'] = 'same-site'
-    headers['sec-ch-ua'] = 'Not A;Brand";v="99", "Chromium";v="102", "Google Chrome";v="102"'
-    headers['sec-ch-ua-mobile'] = '?0'
-    headers['sec-ch-ua-platform'] = '"Linux"'
+    # In Chrome, find the correct call to `data.json`, right click and select "Copy as cURL".
+    # Then visit curlconverter.com to convert the Bash cURL request to Python:
 
-    resp = requests.post(url, headers=headers, data=data)
-    if resp.status_code != 200:
-        logging.error("Error: API access failed with %d" % resp.status_code)
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9,sv;q=0.8',
+        'content-type': 'text/plain',
+        'origin': 'https://www.trafikverket.se',
+        'priority': 'u=1, i',
+        'referer': 'https://www.trafikverket.se/',
+        'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-site',
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    }
+
+    data = "<REQUEST>\n        <LOGIN authenticationkey='707695ca4c704c93a80ebf62cf9af7b5'/> \n        <QUERY  objecttype='WeatherMeasurepoint' schemaversion='2' sseurl='true'>\n            <FILTER>\n                <NOTLIKE name='Name' value='Fjärryta'/>\n            </FILTER>\n        </QUERY>\n    </REQUEST>".encode()
+    response = requests.post('https://api.trafikinfo.trafikverket.se/v2/data.json', headers=headers, data=data)
+
+    if response.status_code != 200:
+        logging.error(f"Error: API access failed with {response.status_code}")
         return None
     if save_file:
         with open('weather.json', 'w') as f:
-            f.write(resp.text)
-    return resp.json()
+            f.write(response.text)
+    return response.json()
 
 
 def process_feed(j: dict, config: dict, max_age: int) -> bool:
@@ -88,108 +91,147 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
     Returns:
         bool: True if we published data
     """
-    p = []
-    broker = config["MQTT"]["MQTTBroker"]
-
     retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
     if j is None:
         logging.error("No JSON returned, seems the api was updated")
+        mqttwrapper.publish(config["MQTT"]["MQTTTemperatureErrorTopic"], "API error", retain=retain)
         return False
     if "RESPONSE" not in j:
         logging.error("Response is invalid, seems the api was updated ('RESPONSE' is missing)")
+        mqttwrapper.publish(config["MQTT"]["MQTTTemperatureErrorTopic"], "API error", retain=retain)
         return False
     if "RESULT" not in j["RESPONSE"]:
         logging.error("Response is invalid, seems the api was updated ('RESULT' is missing)")
+        mqttwrapper.publish(config["MQTT"]["MQTTTemperatureErrorTopic"], "API error", retain=retain)
         return False
     if len(j["RESPONSE"]["RESULT"]) == 0:
         logging.error("Response is invalid, seems the api was updated ('RESULT.RESULT' is missing)")
+        mqttwrapper.publish(config["MQTT"]["MQTTTemperatureErrorTopic"], "API error", retain=retain)
         return False
-    for w in j["RESPONSE"]["RESULT"][0]["WeatherStation"]:
-        if w["Id"] == ("SE_STA_VVIS%s" % config["Weather"]["StationID"]):
-            now = datetime.datetime.now()
-            try:
-                name = w["Name"]
-            except KeyError:
-                name = "noname"
-            meas = w["Measurement"]
-            time = parse(meas["MeasureTime"])
-            time = time.replace(tzinfo=None)
-            time_delta = now - time
-            age = round(time_delta.total_seconds() / 60)
-            if age > max_age:
-                logging.warning("Current measurement is too old, trying history")
-                time = parse(w["MeasurementHistory"][0]["MeasureTime"])
+    try:
+        for w in j["RESPONSE"]["RESULT"][0]["WeatherMeasurepoint"]:
+            if w["Id"] == str(config["Weather"]["StationID"]):
+                now = datetime.datetime.now()
+                try:
+                    name = w["Name"]
+                except KeyError as e:
+                    name = "noname"
+                observation = w["Observation"]
+                time = parse(observation["Sample"])
+                time = time.replace(tzinfo=None)
                 time_delta = now - time
                 age = round(time_delta.total_seconds() / 60)
-                if age < max_age:
-                    meas = w["MeasurementHistory"][0]
+                if age > max_age:
+                    logging.warning("Current measurement is too old, trying history")
+                    time = parse(w["MeasurementHistory"][0]["MeasureTime"])
+                    time_delta = now - time
+                    age = round(time_delta.total_seconds() / 60)
+                    #if age < max_age:
+                    #    observation = w["MeasurementHistory"][0]
 
-            try:
-                wind_speed = meas["Wind"]["Force"]
-            except KeyError:
-                wind_speed = None
-            try:
-                wind_gust = meas["Wind"]["ForceMax"]
-            except KeyError:
-                wind_gust = None
-            try:
-                # Precipitation looks like precipitationSnow or precipitationNoPrecipitation
-                # Chop off the leading 'precipitation'
-                precip_type = meas["Precipitation"]["TypeIconId"]
-                precip_type = precip_type[len("precipitation"):].lower()
-                if not precip_type in p:
-                    p.append(precip_type)
-            except KeyError:
-                precip_type = None
-            try:
-                precip_amount = meas["Precipitation"]["Amount"]
-            except KeyError:
+                try:
+                    wind_speed = observation["Wind"][0]["Speed"]["Value"]
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    wind_speed = None
+                try:
+                    wind_gust = observation["Aggregated10minutes"]["Wind"]["SpeedMax"]["Value"]
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    wind_gust = None
+                try:
+                    wind_dir = observation["Wind"][0]["Direction"]["Value"]
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    wind_dir = None
+
+                try:
+                    # Precipitation looks like precipitationSnow or precipitationNoPrecipitation
+                    # Chop off the leading 'precipitation'
+                    precip_type = observation["Weather"]["Precipitation"].lower()
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    precip_type = None
                 precip_amount = 0
+                if "Precipitation" in observation:
+                    try:
+                        if "Rain" in observation["Precipitation"] and observation["Precipitation"]["Rain"]:
+                            precip_amount = observation["Precipitation"]["Rain"]["RainSum"]["Value"]
+                        elif "Snow" in observation["Precipitation"] and observation["Precipitation"]["Snow"]:
+                            precip_amount = observation["Precipitation"]["Snow"]["SnowSum"]["Solid"]["Value"]
+                    except KeyError as e:
+                        logging.error(f"JSON error in {observation}", exc_info=e)
 
-            air_temp = float(meas["Air"]["Temp"])
-            # Methinks decimals look silly
-            if air_temp < 0.1 and air_temp > -0.1:
-                logging.debug("Zeroing %.2f -> %.2f" % (air_temp, 0))
-                air_temp = 0
-            elif air_temp > 2 or air_temp < -2:
-                logging.debug("Rounding %.2f -> %.2f" % (air_temp, round(air_temp)))
-                air_temp = round(air_temp)
+                try:
+                    air_temp = float(observation["Air"]["Temperature"]["Value"])
+                    # Methinks decimals look silly
+                    if air_temp < 0.1 and air_temp > -0.1:
+                        logging.debug("Zeroing %.2f -> %.2f" % (air_temp, 0))
+                        air_temp = 0
+                    elif air_temp > 2 or air_temp < -2:
+                        logging.debug("Rounding %.2f -> %.2f" % (air_temp, round(air_temp)))
+                        air_temp = round(air_temp)
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    air_temp = None
 
-            road_temp = float(meas["Road"]["Temp"])
-            # Methinks decimals look silly
-            if road_temp < 0.1 and road_temp > -0.1:
-                logging.debug("Zeroing %.2f -> %.2f" % (road_temp, 0))
-                road_temp = 0
-            elif road_temp > 2 or air_temp < -2:
-                logging.debug("Rounding %.2f -> %.2f" % (road_temp, round(road_temp)))
-                road_temp = round(road_temp)
+                try:
+                    dew_point = float(observation["Air"]["Dewpoint"]["Value"])
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    dew_point = None
 
-            wind_dir = meas["Wind"]["Direction"]
+                try:
+                    rh = float(observation["Air"]["RelativeHumidity"]["Value"])
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    rh = None
 
-            if age < max_age:
-                logging.debug("%s: temperature %s°C, wind %sm/s from %s (gust %sm/s), %s" % (name, air_temp, wind_speed, wind_dir, wind_gust, precip_type.lower()))
-                observation = {"temperature": air_temp,
-                               "road_temperature": air_temp,
-                               "wind_speed": wind_speed,
-                               "wind_gust": wind_gust,
-                               "wind_direction": wind_dir,
-                               "precip_type": precip_type,
-                               "precip_amount": precip_amount
-                               }
-                observation = "%s" % observation
-                observation = observation.replace(" ", "").replace("'", "\"")
-                mqttwrapper.publish(config["MQTT"]["MQTTObservationTopic"], observation, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTRoadTemperatureTopic"], road_temp, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type, retain=retain)
-                mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain=retain)
-                return True
-            else:
-                logging.error("Measurement too old (%d minutes)" % age)
-                return False
+                try:
+                    road_temp = float(observation["Surface"]["Temperature"]["Value"])
+                    # Methinks decimals look silly
+                    if road_temp < 0.1 and road_temp > -0.1:
+                        logging.debug("Zeroing %.2f -> %.2f" % (road_temp, 0))
+                        road_temp = 0
+                    elif road_temp > 2 or air_temp < -2:
+                        logging.debug("Rounding %.2f -> %.2f" % (road_temp, round(road_temp)))
+                        road_temp = round(road_temp)
+                except KeyError as e:
+                    logging.error("JSON error", exc_info=e)
+                    road_temp = None
+
+
+                if age < max_age:
+                    logging.debug(f"{name}: road:{road_temp}°C air:{air_temp}°C wind:{wind_speed}m/s from {wind_dir} (gust {wind_gust}m/s), precipitation:{precip_type} dew point:{dew_point}°C rh:{rh}%")
+                    observation = {"temperature": air_temp,
+                                "road_temperature": road_temp,
+                                "wind_speed": wind_speed,
+                                "wind_gust": wind_gust,
+                                "wind_direction": wind_dir,
+                                "precip_type": precip_type,
+                                "precip_amount": precip_amount,
+                                "dew_point": dew_point,
+                                "relative_himidity": rh,
+                                }
+                    observation = "%s" % observation
+                    observation = observation.replace(" ", "").replace("'", "\"")
+                    mqttwrapper.publish(config["MQTT"]["MQTTObservationTopic"], observation, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTOutsideTemperatureTopic"], air_temp, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTRoadTemperatureTopic"], road_temp, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTWindSpeedTopic"], wind_speed, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTWindGustTopic"], wind_gust, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTWindDirectionTopic"], wind_dir, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationTypeTopic"], precip_type, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationAmountTopic"], precip_amount, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTDewPointTopic"], dew_point, retain=retain)
+                    mqttwrapper.publish(config["MQTT"]["MQTTRelativeHumidityTopic"], rh, retain=retain)
+                    return True
+                else:
+                    logging.error("Measurement too old (%d minutes)" % age)
+                    return False
+    except KeyError as e:
+        logging.error("JSON error", exc_info=e)
+        mqttwrapper.publish(config["MQTT"]["MQTTTemperatureErrorTopic"], "JSON error", retain=retain)
 
 
 def mqtt_callback(topic: str, payload: str):
@@ -220,15 +262,24 @@ def main():
 
     broker = config["MQTT"]["MQTTBroker"]
     retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
-    mqttwrapper.run_script(mqtt_callback, broker=broker, topics=["/nada"], retain=retain, blocking=False)
+
+    warned: bool = False
     while not mqttwrapper.is_connected():
-        time.sleep(1)
-    logging.info("Connected to MQTT broker")
+        try:
+            mqttwrapper.run_script(mqtt_callback, broker=broker, topics=["/nada"], retain=retain, blocking=False)
+        except socket.gaierror:
+            if not warned:
+                logging.warning(f"Failed to connect to MQTT broker at {broker}, will retry")
+                warned = True
+            time.sleep(1)
+
+    logging.info(f"Connected to MQTT broker at {broker}")
 
     if args.load:
         max_age = 99999999
         with open('weather.json', 'r') as f:
             j = json.loads(f.read())
+            logging.info("Loaded weather JSON")
     else:
         # Disregard from meauserements older that 60 minutes
         max_age = 60
@@ -249,6 +300,8 @@ def main():
             mqttwrapper.publish(config["MQTT"]["MQTTWindDirectionTopic"], measurement_too_old, retain)
             mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationTypeTopic"], measurement_too_old, retain)
             mqttwrapper.publish(config["MQTT"]["MQTTPrecipitationAmountTopic"], measurement_too_old, retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTDewPointTopic"], measurement_too_old, retain=retain)
+            mqttwrapper.publish(config["MQTT"]["MQTTRelativeHumidityTopic"], measurement_too_old, retain=retain)
 
 
 if __name__ == "__main__":
