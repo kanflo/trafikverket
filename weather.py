@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Not copyrighted at all by Johan Kanflo in 2019 - CC0 applies
+# Not copyrighted at all by Johan Kanflo in 2019-2025 - CC0 applies
 #
 # Pull data from the inofficial Trafikverket weather stataion API (2MiB of data
 # mind you...). Search for the weather station in the provided config file and
@@ -272,7 +272,6 @@ def main():
                 logging.warning(f"Failed to connect to MQTT broker at {broker}, will retry")
                 warned = True
             time.sleep(1)
-
     logging.info(f"Connected to MQTT broker at {broker}")
 
     if args.load:

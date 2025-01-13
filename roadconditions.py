@@ -31,7 +31,7 @@ try:
 except ImportError:
     print("sudo -H python -m pip install git+https://github.com/kanflo/mqttwrapper")
     sys.exit(1)
-
+import socket
 
 def get_image(url: str) -> PngImageFile:
     """Fetch image and load into PIL
@@ -183,10 +183,16 @@ def main():
     retain = "Retain" in config["MQTT"] and "True" in config["MQTT"]["Retain"]
     topic = config["MQTT"]["MQTTRoadConditionTopic"]
 
-    mqttwrapper.run_script(mqtt_callback, broker=broker, topics=["/nada"], retain=retain, blocking=False)
+    warned: bool = False
     while not mqttwrapper.is_connected():
-        time.sleep(1)
-    logging.info("Connected to MQTT broker")
+        try:
+            mqttwrapper.run_script(mqtt_callback, broker=broker, topics=["/nada"], retain=retain, blocking=False)
+        except socket.gaierror:
+            if not warned:
+                logging.warning(f"Failed to connect to MQTT broker at {broker}, will retry")
+                warned = True
+            time.sleep(1)
+    logging.info(f"Connected to MQTT broker at {broker}")
 
     for i in range(0, 10):
         key = "Condition%d" % (i)
