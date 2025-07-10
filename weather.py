@@ -155,10 +155,11 @@ def process_feed(j: dict, config: dict, max_age: int) -> bool:
                 precip_amount = 0
                 if "Aggregated30minutes" in observation:
                     try:
-                        if "Rain" in observation["Aggregated30minutes"]["Precipitation"] and observation["Aggregated30minutes"]["Precipitation"]["Rain"]:
-                            precip_amount = observation["Aggregated30minutes"]["Precipitation"]["RainSum"]["Value"]
-                        elif "Snow" in observation["Aggregated30minutes"]["Precipitation"] and observation["Precipitation"]["Snow"]:
-                            precip_amount = observation["Aggregated30minutes"]["Precipitation"]["SnowSum"]["Solid"]["Value"]
+                        if "Precipitation" in observation and "Precipitation" in observation["Aggregated30minutes"]:
+                            if "Rain" in observation["Aggregated30minutes"]["Precipitation"] and observation["Aggregated30minutes"]["Precipitation"]["Rain"]:
+                                precip_amount = observation["Aggregated30minutes"]["Precipitation"]["RainSum"]["Value"]
+                            elif "Snow" in observation["Aggregated30minutes"]["Precipitation"] and observation["Precipitation"]["Snow"]:
+                                precip_amount = observation["Aggregated30minutes"]["Precipitation"]["SnowSum"]["Solid"]["Value"]
                     except KeyError as e:
                         logging.error(f"JSON error in {observation}", exc_info=e)
 
